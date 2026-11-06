@@ -1,110 +1,446 @@
-import {DEFAULTS,PRESETS,normalize,calculate,DAYS} from './model.mjs';
-import {OceanScene} from './scene.mjs';
-const $=id=>document.getElementById(id);
-const fmt=new Intl.NumberFormat('en-GB');
-let params={...DEFAULTS},preset='response',day=0,playing=false,speed=30,last=0,carry=0,metric='B',showLice=false,data=null,requestId=0;
-const scene=new OceanScene($('ocean'));
-let worker;
-try{worker=new Worker(new URL('./worker.mjs',import.meta.url),{type:'module'});worker.onmessage=({data:d})=>{if(d.id!==requestId)return;if(d.error){console.error(d.error);data=calculate(params);}else data=d.result;renderResults();};worker.onerror=()=>{worker.terminate();worker=null;data=calculate(params);renderResults();};}catch{worker=null;}
-function run(){params=normalize(params);syncControls();requestId++;if(worker)worker.postMessage({id:requestId,params});else{data=calculate(params);renderResults();}}
-function renderResults(){renderMarkers();renderChart();renderDay();renderTakeaway();$('status').textContent='Scenario recalculated. All results are illustrative.';}
-function syncControls(){
-  for(const k of ['warming','seedDay','treatmentDay'])$(k).value=params[k];$('feed').value=Math.round(params.feed*100);
-  for(const k of ['infestation','treatment','repeat'])$(k).checked=params[k];
-  $('warming-value').textContent=params.warming===0?'Typical season':`${params.warming>0?'+':''}${params.warming.toFixed(1)}°C`;
-  $('feed-value').textContent=`${Math.round(params.feed*100)}%`;
-  for(const k of ['seedDay','treatmentDay'])$(k+'-value').textContent=`Day ${params[k]}`;
-  $('lice-settings').hidden=!params.infestation;$('treatment-settings').hidden=!params.treatment;
-  document.querySelectorAll('[data-preset]').forEach(b=>{const on=b.dataset.preset===preset;b.classList.toggle('active',on);b.setAttribute('aria-pressed',String(on));});
-  $('scene-title').textContent=PRESETS[preset]?.name||'Your own experiment';
-}
-function choosePreset(key){preset=key;params={...PRESETS[key].values};day=0;pause();run();}
-document.querySelectorAll('[data-preset]').forEach(b=>b.addEventListener('click',()=>choosePreset(b.dataset.preset)));
-for(const k of ['warming','seedDay','treatmentDay'])$(k).addEventListener('input',e=>{params[k]=Number(e.target.value);run();});
-$('feed').addEventListener('input',e=>{params.feed=Number(e.target.value)/100;run();});
-for(const k of ['infestation','treatment','repeat'])$(k).addEventListener('change',e=>{params[k]=e.target.checked;run();});
-$('toggle-settings').addEventListener('click',()=>{const open=$('toggle-settings').getAttribute('aria-expanded')!=='true';$('toggle-settings').setAttribute('aria-expanded',String(open));$('toggle-settings').querySelector('span').textContent=open?'−':'+';$('season-settings').classList.toggle('expanded',open);});
-$('reset-settings').addEventListener('click',()=>choosePreset(preset));
-function pause(){playing=false;$('play-icon').textContent='▶';$('play-label').textContent=day>=DAYS?'Replay':'Play season';$('play').setAttribute('aria-label',day>=DAYS?'Replay the season':'Play the season');}
-$('play').addEventListener('click',()=>{if(playing)pause();else{if(day>=DAYS)day=0;playing=true;carry=0;last=performance.now();$('play-icon').textContent='Ⅱ';$('play-label').textContent='Pause';$('play').setAttribute('aria-label','Pause the season');}});
-$('rewind').addEventListener('click',()=>{day=0;pause();renderDay();});
-$('speed').addEventListener('change',e=>speed=Number(e.target.value));
-$('time').addEventListener('input',e=>{day=Number(e.target.value);pause();renderDay();});
-$('jump-end').addEventListener('click',()=>{day=DAYS;pause();renderDay();$('ocean').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'center'});});
-$('show-lice').addEventListener('click',()=>{showLice=!showLice;$('show-lice').setAttribute('aria-pressed',String(showLice));$('show-lice').querySelector('span').textContent=showLice?'Hide the parasites':'Reveal the parasites';renderDay();});
-function tick(now){requestAnimationFrame(tick);if(!playing||!data){last=now;return;}if(document.hidden){last=now;return;}carry+=Math.min((now-last)/1000,.1)*speed;last=now;if(carry>=1){day=Math.min(DAYS,day+Math.floor(carry));carry%=1;renderDay();if(day===DAYS)pause();}}
-requestAnimationFrame(tick);
-function renderDay(){
-  if(!data)return;const r=data.main[day];$('time').value=day;$('day-number').textContent=day;$('temperature').textContent=r.T.toFixed(1);
-  const season=day<60?'EARLY SPRING':day<150?'SUMMER':day<240?'AUTUMN':day<330?'WINTER':'A SEASON COMPLETE';$('season-name').textContent=season;
-  $('fish-count').textContent=fmt.format(Math.round(r.N));$('survival').textContent=`${(100*r.N/params.fish).toFixed(1)}% of the original school`;
-  $('fish-weight').innerHTML=`${(r.W/1000).toFixed(2)} <i>kg</i>`;$('biomass').innerHTML=`${r.B.toFixed(1)} <i>t</i>`;$('lice-count').textContent=r.lice.toFixed(2);
-  let caption='A new cohort enters the water. The fish will grow in size, not reproduce in this cage.';
-  if(day>10)caption='The school is growing. Biomass combines how many fish survive with how much each fish weighs.';
-  if(params.infestation&&day>=params.seedDay)caption='A life cycle begins. Young lice attach, mature and contribute to the next generation.';
-  if(r.lice>.35)caption='More adult females mean more potential offspring. Outside infestation can also replenish the cycle.';
-  if(r.recovery>0)caption='The intervention has reduced attached lice. Fish also face an illustrative recovery period and a small immediate loss.';
-  else if(r.treatments>0&&r.lice<.35)caption='Attached lice are lower after intervention. Surviving stages and outside arrivals can still rebuild the population.';
-  if(day===DAYS)caption='A year has passed. Compare fish survival, growth and lice together: one number cannot tell the whole story.';
-  $('scene-caption').textContent=caption;scene.initialFish=params.fish;scene.update(r,showLice);
-  const line=$('cursor-line');if(line){const x=43+day/DAYS*(chartWidth-68);line.setAttribute('x1',x);line.setAttribute('x2',x);$('cursor-dot').setAttribute('cx',x);$('cursor-dot').setAttribute('cy',chartY(value(r)));}
-}
-function renderMarkers(){let s='';if(params.infestation)s+=`<span class="event-marker" style="left:${params.seedDay/DAYS*100}%" title="Lice introduced on day ${params.seedDay}"></span>`;if(params.treatment){for(let d=params.treatmentDay;d<=DAYS;d+=params.repeat?70:1000)s+=`<span class="event-marker treatment" style="left:${d/DAYS*100}%" title="Intervention on day ${d}"></span>`;}$('event-markers').innerHTML=s;}
-const metricInfo={B:{name:'Biomass',unit:'tonnes'},lice:{name:'Adult female lice',unit:'per fish'},W:{name:'Mean fish weight',unit:'kg'},N:{name:'Survival',unit:'% of initial fish'}};
-function value(r){return metric==='W'?r.W/1000:metric==='N'?r.N/params.fish*100:r[metric];}
-let yMax=1,chartWidth=780;
-function chartY(v){return 182-v/yMax*153;}
-function renderChart(){
-  if(!data)return;chartWidth=Math.max(300,$('chart').clientWidth);const plotWidth=chartWidth-68;let max=Math.max(...[...data.main,...data.untreated,...data.clean].map(value));
-  const bandOn=$('show-band').checked && ['B','lice'].includes(metric);
-  if(bandOn)max=Math.max(max,...data.band.map(b=>metric==='B'?b.Bmax:b.Lmax));
-  yMax=metric==='N'?100:Math.max(metric==='lice'?.1:1,max*1.12);
-  const path=rows=>rows.map((r,i)=>`${i?'L':'M'}${(43+i/DAYS*plotWidth).toFixed(2)},${chartY(value(r)).toFixed(2)}`).join('');
-  let svg=`<svg viewBox="0 0 ${chartWidth} 220" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><title>${metricInfo[metric].name}: simulated full-season comparisons</title><text x="43" y="14" fill="#7e8b73" font-size="10" font-family="sans-serif">${metricInfo[metric].unit}</text>`;
-  for(let i=0;i<=4;i++){const val=yMax*i/4,y=chartY(val);const label=metric==='lice'?val.toFixed(2):metric==='W'?val.toFixed(1):val.toFixed(0);svg+=`<line x1="43" y1="${y}" x2="${chartWidth-25}" y2="${y}" stroke="#dde2d4" stroke-width="1"/><text x="34" y="${y+3}" text-anchor="end" fill="#83907b" font-size="10" font-family="sans-serif">${label}</text>`;}
-  for(const d of (chartWidth<480?[0,180,365]:[0,90,180,270,365]))svg+=`<text x="${43+d/DAYS*plotWidth}" y="207" text-anchor="middle" fill="#83907b" font-size="10" font-family="sans-serif">Day ${d}</text>`;
-  if(bandOn){const b=data.band;const coords=b.map((r,i)=>`${43+i/DAYS*plotWidth},${chartY(metric==='B'?r.Bmax:r.Lmax)}`).concat([...b].reverse().map(r=>`${43+r.day/DAYS*plotWidth},${chartY(metric==='B'?r.Bmin:r.Lmin)}`));svg+=`<polygon points="${coords.join(' ')}" fill="#a7bc8630"/>`;}
-  for(const [rows,color,dash] of [[data.clean,'#96a58b','2 5'],[data.untreated,'#bc8950','6 5'],[data.main,'#365e46','']])svg+=`<path d="${path(rows)}" fill="none" stroke="${color}" stroke-width="${dash?1.8:2.8}" stroke-dasharray="${dash}" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`;
-  svg+=`<line id="cursor-line" x1="48" y1="23" x2="48" y2="186" stroke="#416553" stroke-opacity=".45" stroke-dasharray="3 4"/><circle id="cursor-dot" cx="48" cy="182" r="4" fill="#365e46" stroke="#f6f4ed" stroke-width="2"/></svg>`;
-  $('chart').innerHTML=svg;$('chart').setAttribute('aria-label',`${metricInfo[metric].name}, full-season simulated comparison. Your scenario ends at ${value(data.main.at(-1)).toFixed(2)} ${metricInfo[metric].unit}; without intervention ${value(data.untreated.at(-1)).toFixed(2)}.`);
-  $('show-band').disabled=!['B','lice'].includes(metric);renderDay();
-}
-document.querySelectorAll('[data-metric]').forEach(b=>b.addEventListener('click',()=>{metric=b.dataset.metric;document.querySelectorAll('[data-metric]').forEach(x=>{x.classList.toggle('active',x===b);x.setAttribute('aria-pressed',String(x===b));});renderChart();}));
-$('show-band').addEventListener('change',renderChart);
-new ResizeObserver(()=>{if(Math.abs($('chart').clientWidth-chartWidth)>1)renderChart();}).observe($('chart'));
-function renderTakeaway(){
-  const a=data.main.at(-1),b=data.untreated.at(-1),clean=data.clean.at(-1),delta=a.B-b.B;
-  if(!params.infestation){$('takeaway-title').textContent='Growth and survival tell different stories.';$('takeaway-text').textContent=`In this model, ${fmt.format(Math.round(a.N))} fish remain and average ${(a.W/1000).toFixed(2)} kg each. Together they make ${a.B.toFixed(1)} tonnes of biomass.`;}
-  else if(!params.treatment){$('takeaway-title').textContent='A small parasite can change the whole season.';$('takeaway-text').textContent=`This scenario ends with ${a.lice.toFixed(2)} adult female lice per fish and ${(clean.B-a.B).toFixed(1)} fewer tonnes than the parasite-free reference. Try adding an intervention and compare.`;}
-  else{$('takeaway-title').textContent=delta>=0?'A response changes the trajectory.':'An intervention also carries a cost.';$('takeaway-text').textContent=`Your ${a.treatments===1?'intervention':a.treatments+' interventions'} leads to ${Math.abs(delta).toFixed(1)} ${delta>=0?'more':'fewer'} tonnes than the same conditions without intervention. ${fmt.format(Math.round(a.N))} fish remain. These differences depend on the assumed effects.`;}
-}
-$('download').addEventListener('click',()=>{
-  if(!data)return;const metadata=`# Fjord illustrative model v0.1 — uncalibrated, no real farm data\n# Parameters: ${JSON.stringify(params)}\n# Sensitivity envelope is not a confidence interval\n`;
-  const header='day,fish_alive,mean_weight_g,biomass_t,adult_female_lice_per_fish,temperature_c,interventions,biomass_without_intervention_t,biomass_without_parasites_t';
-  const rows=data.main.map((r,i)=>[r.day,r.N.toFixed(2),r.W.toFixed(3),r.B.toFixed(4),r.lice.toFixed(5),r.T.toFixed(2),r.treatments,data.untreated[i].B.toFixed(4),data.clean[i].B.toFixed(4)].join(','));
-  const url=URL.createObjectURL(new Blob([metadata+header+'\n'+rows.join('\n')],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='fjord-illustrative-season.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);$('status').textContent='Illustrative scenario exported as CSV.';
+import { SimulationRunner } from "./simulation-runner.mjs";
+import { describeDay, seasonLabel } from "./presentation.mjs";
+import { DIALOG_CONTENT } from "./dialog-content.mjs";
+import {
+  DEFAULTS,
+  PRESETS,
+  normalize,
+  DAYS,
+  treatmentDays,
+  PARAMETER_LIMITS,
+  GROWTH_MODELS,
+} from "./model.mjs";
+import { OceanScene } from "./scene.mjs";
+const $ = (id) => document.getElementById(id);
+const ADVANCED_FIELDS = [
+  "growth",
+  "fish",
+  "weight",
+  "method",
+  "efficacy",
+  "pressure",
+];
+const numberFormatter = new Intl.NumberFormat("en-GB");
+let parameters = { ...DEFAULTS },
+  selectedPreset = "response",
+  day = 0,
+  playing = false,
+  speed = 30,
+  lastPlaybackTime = 0,
+  pendingDays = 0,
+  metric = "B",
+  showLice = false,
+  data = null;
+const scene = new OceanScene($("ocean"));
+const simulation = new SimulationRunner((result) => {
+  data = result;
+  $("download").disabled = false;
+  document.querySelector(".main-lab").setAttribute("aria-busy", "false");
+  renderResults();
 });
-const content={
-  guide:`<h2>Your first season,<br>in three moves.</h2><ol><li><strong>Choose a story.</strong> Start calmly, add parasites, explore an intervention, or warm the water.</li><li><strong>Press Play season.</strong> Drag the timeline to move freely through the year. Reveal the magnified parasite marks to see the unseen part of the system.</li><li><strong>Change one thing.</strong> Move an event, change the food available, or adjust temperature. Compare the curves and the end-of-year outcomes.</li></ol><p>The dark green line is your scenario. The amber line keeps the same environment and parasites but removes interventions. The dotted line removes both parasites and interventions.</p><p>For a deeper look, open <strong>Fine-tune the model</strong> to compare growth equations, change the initial stock or alter the assumed treatment effects.</p><p class="dialog-warning">This prototype uses illustrative parameters. It is an educational simulation, not a validated forecast or a recommendation for operating a fish farm.</p>`,
-  fish:`<h2>Bigger fish.<br>Not more fish.</h2><p>In this sea-cage grow-out scenario, a cohort is stocked once. The fish gain weight; they do not reproduce. The count decreases through the model’s background losses, additional parasite-related losses and intervention events.</p><div class="equation">Biomass = living fish × mean weight</div><p>For example, 100,000 fish at 150 grams each make 15 tonnes. Later, fewer but heavier fish can still produce more biomass.</p><h3>What the animation means</h3><p>The fish are a representative, stylized school. Their visual size follows mean weight and their number follows the surviving fraction. Individual swimming behaviour, stress behaviour and size variation are not modeled.</p><h3>What the equations assume</h3><p>Each fish has the cohort’s mean weight. Deaths remove attached lice proportionally and do not change survivor mean weight. Transfers, reproduction and harvesting are outside this first prototype.</p>`,
-  parasites:`<h2>What survives<br>can return.</h2><div class="stage-flow"><span>Free-swimming<br>infective pool</span><b>→</b><span>Attached<br>juveniles</span><b>→</b><span>Mobile<br>stages</span><b>→</b><span>Adult<br>females</span></div><p>In this reduced life cycle, adult females contribute to an effective new larval pool. Outside arrivals also contribute after the introduction date. Warmer water speeds development within the modeled range.</p><p>An intervention targets attached stages but leaves the free-swimming pool untouched. Surviving young stages and new arrivals can produce a rebound.</p><p>The main counter reports <strong>adult females per living fish</strong>, not all lice. The model omits adult males and assumes fertilization is available. Effective recruitment combines reproduction, early survival and return to this cage.</p><p class="dialog-warning">Visible parasite marks are greatly magnified and schematic. There is no regulatory threshold built into this prototype.</p>`,
-  uncertainty:`<h2>How much depends<br>on the assumptions?</h2><p>The shaded range reruns the model with four deliberate alternatives to growth, recruitment, mortality and intervention effectiveness. It helps expose sensitivity; it is <strong>not a statistical confidence interval</strong>.</p><p>These changes are illustrative: growth up to ±10%, recruitment up to ±18%, mortality up to ±20% and intervention effectiveness up to ±10% relative to the selected values.</p><p>Differences between growth equations are another source of uncertainty. You can switch the model in Fine-tune the model and see a new trajectory.</p><h3>What would make this a forecast?</h3><p>Calibrating parameters against suitable farm observations, checking withheld time periods, comparing simpler baselines, and evaluating uncertainty coverage. None of those steps has yet been performed for these coefficients.</p>`,
-  notes:`<h2>A transparent model.<br>An illustrative world.</h2><p class="dialog-warning">Version 0.1. All coefficients, treatment profiles, mortality effects and parasite-growth penalties are illustrative and uncalibrated. No live observations are displayed. Do not use these results as farm-management or treatment advice.</p><h3>What runs each day</h3><p>A 365-day deterministic model tracks living fish N, mean weight W in grams, and four absolute lice compartments. Biomass is N × W / 1,000,000 tonnes. Temperature follows a synthetic seasonal curve: 10.5 + 3.5 sin[2π(day − 55)/365] °C, plus your offset.</p><h3>Growth choices</h3><p><strong>Temperature-driven:</strong> cube-root weight increases by 0.00215 × temperature × condition per day, with a penalty above 15°C. <strong>Gompertz:</strong> asymptotic weight 6,500 g and rate 0.0042/day. <strong>Von Bertalanffy:</strong> cube-root weight approaches the same asymptote at rate 0.0028/day. The last two do not respond directly to temperature; temperature still affects parasites.</p><p>Condition multiplies food availability, a hypothetical mobile-lice penalty 1/(1 + 0.055 × mobile lice/fish), and a 0.75 recovery factor for seven days after intervention.</p><h3>Parasite compartments</h3><p>Daily onward/mortality hazards are 0.075 × N/N₀ and 0.18 for the larval pool; 0.038 × q and 0.012 for juveniles; 0.035 × q and 0.017 for mobile stages. Adult female mortality is 0.025/day. q = 1.8^((T − 10)/10). Exponential competing-risk updates keep populations nonnegative.</p><p>Half of mobile-stage maturation enters adult females; adult males leave this reduced accounting. Effective recruitment is 0.8 × q × adult females / (1 + mobile lice per fish / 12). Outside arrivals are N₀ × 0.0015 × the arrival setting per day, beginning at the introduction date. Initial introduction adds 0.6 × N infective units. These are effective model counts, not measured egg output.</p><h3>Survival and intervention</h3><p>Background fish mortality hazard is 0.00014/day. An illustrative additional hazard is 0.00023 × max(0, mobile lice/fish − 1). All attached stages leave proportionally when fish die.</p><p>Every intervention is a single pulse with 0.3% immediate fish loss and seven days of reduced growth. A broad pulse removes 0.9 × efficacy of juveniles and efficacy of mobile stages and adult females. An adult-focused pulse removes 0.2 × efficacy, 0.65 × efficacy, and efficacy respectively. It leaves free-swimming stages unchanged. These generic profiles do not represent any named medicine or procedure.</p><h3>What is outside the model</h3><p>Oxygen, salinity, genetics, other diseases, size-selective deaths, currents, harvesting, resistance and farm-to-farm connectivity. No parameter is estimated from the sources below. The daily discretization and reduced life cycle are simplifications.</p><h3>Research foundations & future data</h3><ul><li><a href="https://slim.readthedocs.io/en/latest/model.html" target="_blank" rel="noopener noreferrer">SLIM: staged sea-lice population models</a></li><li><a href="https://fishmet.uib.no/" target="_blank" rel="noopener noreferrer">FishMet: a richer fish appetite and growth framework</a></li><li><a href="https://pubmed.ncbi.nlm.nih.gov/33606885/" target="_blank" rel="noopener noreferrer">Research on mortality following delousing</a></li><li><a href="https://developer.barentswatch.no/docs/fishhealth/" target="_blank" rel="noopener noreferrer">BarentsWatch: potential observational data for future validation</a></li></ul><p>The model structure is inspired by population modeling. This app is an independent educational implementation, not an implementation or endorsement of those research tools.</p>`
-};
-let lastFocus;
-function openDialog(name){
-  pause();lastFocus=document.activeElement;
-  if(name==='advanced'){
-    $('dialog-content').innerHTML=`<h2>A little more control.</h2><p>All values describe an illustrative cohort. They are not calibrated farm parameters.</p><div class="dialog-controls"><label>Growth model<select id="adv-growth"><option value="thermal">Temperature-driven growth</option><option value="gompertz">Gompertz growth curve</option><option value="bertalanffy">Von Bertalanffy growth curve</option></select></label><label>Initial number of fish<input id="adv-fish" type="number" min="1000" max="200000" step="1000"></label><label>Initial mean weight (grams)<input id="adv-weight" type="number" min="50" max="500" step="10"></label><label>Intervention profile<select id="adv-method"><option value="broad">Broad pulse — affects all attached stages</option><option value="adult">Adult-focused pulse — more young stages survive</option></select></label><label class="range-label" for="adv-efficacy">Assumed adult-stage removal<output id="adv-efficacy-value"></output></label><input id="adv-efficacy" type="range" min="0" max="100" step="5"><label class="range-label" for="adv-pressure">Outside infestation pressure<output id="adv-pressure-value"></output></label><input id="adv-pressure" type="range" min="0" max="2" step="0.1"></div><p style="margin-top:20px">Interventions also have a small illustrative fish loss and temporary growth cost. The two simple curve models do not directly respond to temperature; their parasites still do.</p><button id="apply-advanced" class="play-button">Apply & explore →</button>`;
-    for(const key of ['growth','fish','weight','method','efficacy','pressure'])$('adv-'+key).value=params[key];
-    function labels(){$('adv-efficacy-value').textContent=$('adv-efficacy').value+'%';$('adv-pressure-value').textContent=Number($('adv-pressure').value).toFixed(1)+'×';}labels();$('adv-efficacy').oninput=labels;$('adv-pressure').oninput=labels;
-    $('apply-advanced').onclick=()=>{for(const key of ['growth','fish','weight','method','efficacy','pressure'])params[key]=['growth','method'].includes(key)?$('adv-'+key).value:Number($('adv-'+key).value);closeDialog();run();};
-  }else $('dialog-content').innerHTML=content[name]||content.guide;
-  if(!$('info-dialog').open)$('info-dialog').showModal();$('info-dialog').scrollTop=0;$('close-dialog').focus();
+function run() {
+  parameters = normalize(parameters);
+  syncControls();
+  $("download").disabled = true;
+  document.querySelector(".main-lab").setAttribute("aria-busy", "true");
+  $("status").textContent = "Recalculating the scenario.";
+  simulation.request(parameters);
 }
-function closeDialog(){$('info-dialog').close();lastFocus?.focus();}
-document.querySelectorAll('[data-dialog]').forEach(b=>b.addEventListener('click',()=>openDialog(b.dataset.dialog)));
-$('close-dialog').addEventListener('click',closeDialog);
-$('info-dialog').addEventListener('click',e=>{if(e.target===$('info-dialog')){const r=$('info-dialog').getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)closeDialog();}});
-$('info-dialog').addEventListener('close',()=>lastFocus?.focus());
+function renderResults() {
+  renderMarkers();
+  renderChart();
+  renderTakeaway();
+  $("status").textContent =
+    "Scenario recalculated. All results are illustrative.";
+}
+function syncControls() {
+  for (const k of ["warming", "seedDay", "treatmentDay"])
+    $(k).value = parameters[k];
+  $("feed").value = Math.round(parameters.feed * 100);
+  for (const k of ["infestation", "treatment", "repeat"])
+    $(k).checked = parameters[k];
+  $("warming-value").textContent =
+    parameters.warming === 0
+      ? "Typical season"
+      : `${parameters.warming > 0 ? "+" : ""}${parameters.warming.toFixed(1)}°C`;
+  $("feed-value").textContent = `${Math.round(parameters.feed * 100)}%`;
+  for (const k of ["seedDay", "treatmentDay"])
+    $(k + "-value").textContent = `Day ${parameters[k]}`;
+  $("lice-settings").hidden = !parameters.infestation;
+  $("treatment-settings").hidden = !parameters.treatment;
+  document.querySelectorAll("[data-preset]").forEach((button) => {
+    const on = button.dataset.preset === selectedPreset;
+    button.classList.toggle("active", on);
+    button.setAttribute("aria-pressed", String(on));
+  });
+  $("scene-title").textContent =
+    PRESETS[selectedPreset]?.name || "Your own experiment";
+}
+function choosePreset(key) {
+  selectedPreset = key;
+  parameters = { ...PRESETS[key].values };
+  day = 0;
+  pause();
+  run();
+}
+document
+  .querySelectorAll("[data-preset]")
+  .forEach((button) =>
+    button.addEventListener("click", () => choosePreset(button.dataset.preset)),
+  );
+for (const k of ["warming", "seedDay", "treatmentDay"])
+  $(k).addEventListener("input", (e) => {
+    parameters[k] = Number(e.target.value);
+    run();
+  });
+$("feed").addEventListener("input", (e) => {
+  parameters.feed = Number(e.target.value) / 100;
+  run();
+});
+for (const k of ["infestation", "treatment", "repeat"])
+  $(k).addEventListener("change", (e) => {
+    parameters[k] = e.target.checked;
+    run();
+  });
+$("toggle-settings").addEventListener("click", () => {
+  const open = $("toggle-settings").getAttribute("aria-expanded") !== "true";
+  $("toggle-settings").setAttribute("aria-expanded", String(open));
+  $("toggle-settings").querySelector("span").textContent = open ? "−" : "+";
+  $("season-settings").classList.toggle("expanded", open);
+});
+$("reset-settings").addEventListener("click", () =>
+  choosePreset(selectedPreset),
+);
+function pause() {
+  playing = false;
+  $("play-icon").textContent = "▶";
+  $("play-label").textContent = day >= DAYS ? "Replay" : "Play season";
+  $("play").setAttribute(
+    "aria-label",
+    day >= DAYS ? "Replay the season" : "Play the season",
+  );
+}
+$("play").addEventListener("click", () => {
+  if (playing) pause();
+  else {
+    if (day >= DAYS) {
+      day = 0;
+      renderDay();
+    }
+    playing = true;
+    pendingDays = 0;
+    lastPlaybackTime = performance.now();
+    $("play-icon").textContent = "Ⅱ";
+    $("play-label").textContent = "Pause";
+    $("play").setAttribute("aria-label", "Pause the season");
+  }
+});
+$("rewind").addEventListener("click", () => {
+  day = 0;
+  pause();
+  renderDay();
+});
+$("speed").addEventListener("change", (e) => (speed = Number(e.target.value)));
+$("time").addEventListener("input", (e) => {
+  day = Number(e.target.value);
+  pause();
+  renderDay();
+});
+$("jump-end").addEventListener("click", () => {
+  day = DAYS;
+  pause();
+  renderDay();
+  $("ocean").scrollIntoView({
+    behavior: matchMedia("(prefers-reduced-motion: reduce)").matches
+      ? "instant"
+      : "smooth",
+    block: "center",
+  });
+});
+$("show-lice").addEventListener("click", () => {
+  showLice = !showLice;
+  $("show-lice").setAttribute("aria-pressed", String(showLice));
+  $("show-lice").querySelector("span").textContent = showLice
+    ? "Hide the parasites"
+    : "Reveal the parasites";
+  renderDay();
+});
+function tick(now) {
+  requestAnimationFrame(tick);
+  if (!playing || !data) {
+    lastPlaybackTime = now;
+    return;
+  }
+  if (document.hidden) {
+    lastPlaybackTime = now;
+    return;
+  }
+  pendingDays += Math.min((now - lastPlaybackTime) / 1000, 0.1) * speed;
+  lastPlaybackTime = now;
+  if (pendingDays >= 1) {
+    day = Math.min(DAYS, day + Math.floor(pendingDays));
+    pendingDays %= 1;
+    renderDay();
+    if (day === DAYS) pause();
+  }
+}
+requestAnimationFrame(tick);
+function renderDay() {
+  if (!data) return;
+  const record = data.main[day];
+  $("time").value = day;
+  $("day-number").textContent = day;
+  $("temperature").textContent = record.T.toFixed(1);
+  $("season-name").textContent = seasonLabel(day);
+  $("fish-count").textContent = numberFormatter.format(Math.round(record.N));
+  $("survival").textContent =
+    `${((100 * record.N) / data.p.fish).toFixed(1)}% of the original school`;
+  $("fish-weight").innerHTML = `${(record.W / 1000).toFixed(2)} <i>kg</i>`;
+  $("biomass").innerHTML = `${record.B.toFixed(1)} <i>t</i>`;
+  $("lice-count").textContent = record.lice.toFixed(2);
+  $("scene-caption").textContent = describeDay(
+    record,
+    data.untreated[day],
+    data.p,
+  );
+  scene.initialFish = data.p.fish;
+  scene.update(record, showLice);
+  const line = $("cursor-line");
+  if (line) {
+    const x = chartX(day);
+    line.setAttribute("x1", x);
+    line.setAttribute("x2", x);
+    $("cursor-dot").setAttribute("cx", x);
+    $("cursor-dot").setAttribute("cy", chartY(value(record)));
+  }
+}
+function renderMarkers() {
+  const parameters = data.p;
+  const markers = treatmentDays(parameters).map(
+    (day) =>
+      `<span class="event-marker treatment" style="left:${(day / DAYS) * 100}%" title="Intervention on day ${day}"></span>`,
+  );
+  if (parameters.infestation)
+    markers.push(
+      `<span class="event-marker" style="left:${(parameters.seedDay / DAYS) * 100}%" title="Lice introduced on day ${parameters.seedDay}"></span>`,
+    );
+  $("event-markers").innerHTML = markers.join("");
+}
+const METRICS = {
+  B: { name: "Biomass", decimals: 0, unit: "tonnes" },
+  lice: { name: "Adult female lice", decimals: 2, unit: "per fish" },
+  W: { name: "Mean fish weight", decimals: 1, unit: "kg" },
+  N: { name: "Survival", decimals: 0, unit: "% of initial fish" },
+};
+function value(record) {
+  if (metric === "W") return record.W / 1000;
+  if (metric === "N") return (record.N / data.p.fish) * 100;
+  return record[metric];
+}
+let yMax = 1,
+  chartWidth = 780;
+function chartX(day) {
+  return 43 + (day / DAYS) * (chartWidth - 68);
+}
+function chartY(value) {
+  return 182 - (value / yMax) * 153;
+}
+function renderChart() {
+  if (!data) return;
+  chartWidth = Math.max(300, $("chart").clientWidth);
+  let max = 0;
+  for (const series of [data.main, data.untreated, data.clean]) {
+    for (const record of series) max = Math.max(max, value(record));
+  }
+  const bandOn = $("show-band").checked && ["B", "lice"].includes(metric);
+  if (bandOn)
+    max = Math.max(
+      max,
+      ...data.band.map((b) => (metric === "B" ? b.Bmax : b.Lmax)),
+    );
+  yMax =
+    metric === "N" ? 100 : Math.max(metric === "lice" ? 0.1 : 1, max * 1.12);
+  const path = (rows) =>
+    rows
+      .map(
+        (record, i) =>
+          `${i ? "L" : "M"}${chartX(record.day).toFixed(2)},${chartY(value(record)).toFixed(2)}`,
+      )
+      .join("");
+  let svg = `<svg viewBox="0 0 ${chartWidth} 220" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><title>${METRICS[metric].name}: simulated full-season comparisons</title><text x="43" y="14" fill="var(--muted)" font-size="10" font-family="sans-serif">${METRICS[metric].unit}</text>`;
+  for (let i = 0; i <= 4; i++) {
+    const val = (yMax * i) / 4,
+      y = chartY(val);
+    const label = val.toFixed(METRICS[metric].decimals);
+    svg += `<line x1="43" y1="${y}" x2="${chartWidth - 25}" y2="${y}" stroke="var(--line)" stroke-width="1"/><text x="34" y="${y + 3}" text-anchor="end" fill="var(--muted)" font-size="10" font-family="sans-serif">${label}</text>`;
+  }
+  for (const d of chartWidth < 480 ? [0, 180, 365] : [0, 90, 180, 270, 365])
+    svg += `<text x="${chartX(d)}" y="207" text-anchor="middle" fill="var(--muted)" font-size="10" font-family="sans-serif">Day ${d}</text>`;
+  if (bandOn) {
+    const bounds = data.band;
+    const coords = bounds
+      .map(
+        (record, i) =>
+          `${chartX(record.day)},${chartY(metric === "B" ? record.Bmax : record.Lmax)}`,
+      )
+      .concat(
+        [...bounds]
+          .reverse()
+          .map(
+            (record) =>
+              `${chartX(record.day)},${chartY(metric === "B" ? record.Bmin : record.Lmin)}`,
+          ),
+      );
+    svg += `<polygon points="${coords.join(" ")}" fill="var(--chart-band)"/>`;
+  }
+  for (const [rows, color, dash] of [
+    [data.clean, "var(--chart-clean)", "2 5"],
+    [data.untreated, "var(--chart-untreated)", "6 5"],
+    [data.main, "var(--chart-main)", ""],
+  ])
+    svg += `<path d="${path(rows)}" fill="none" stroke="${color}" stroke-width="${dash ? 1.8 : 2.8}" stroke-dasharray="${dash}" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`;
+  svg += `<line id="cursor-line" x1="48" y1="23" x2="48" y2="186" stroke="var(--chart-main)" stroke-opacity=".45" stroke-dasharray="3 4"/><circle id="cursor-dot" cx="48" cy="182" r="4" fill="var(--chart-main)" stroke="var(--paper)" stroke-width="2"/></svg>`;
+  $("chart").innerHTML = svg;
+  $("chart").setAttribute(
+    "aria-label",
+    `${METRICS[metric].name}, full-season simulated comparison. Your scenario ends at ${value(data.main.at(-1)).toFixed(2)} ${METRICS[metric].unit}; without intervention ${value(data.untreated.at(-1)).toFixed(2)}.`,
+  );
+  $("show-band").disabled = !["B", "lice"].includes(metric);
+  renderDay();
+}
+document.querySelectorAll("[data-metric]").forEach((button) =>
+  button.addEventListener("click", () => {
+    metric = button.dataset.metric;
+    document.querySelectorAll("[data-metric]").forEach((x) => {
+      x.classList.toggle("active", x === button);
+      x.setAttribute("aria-pressed", String(x === button));
+    });
+    renderChart();
+  }),
+);
+$("show-band").addEventListener("change", renderChart);
+new ResizeObserver(() => {
+  if (Math.abs($("chart").clientWidth - chartWidth) > 1) renderChart();
+}).observe($("chart"));
+function renderTakeaway() {
+  const scenarioEnd = data.main.at(-1),
+    untreatedEnd = data.untreated.at(-1),
+    parasiteFreeEnd = data.clean.at(-1),
+    biomassDifference = scenarioEnd.B - untreatedEnd.B;
+  if (!data.p.infestation) {
+    $("takeaway-title").textContent =
+      "Growth and survival tell different stories.";
+    $("takeaway-text").textContent =
+      `In this model, ${numberFormatter.format(Math.round(scenarioEnd.N))} fish remain and average ${(scenarioEnd.W / 1000).toFixed(2)} kg each. Together they make ${scenarioEnd.B.toFixed(1)} tonnes of biomass.`;
+  } else if (!data.p.treatment) {
+    $("takeaway-title").textContent =
+      "A small parasite can change the whole season.";
+    $("takeaway-text").textContent =
+      `This scenario ends with ${scenarioEnd.lice.toFixed(2)} adult female lice per fish and ${(parasiteFreeEnd.B - scenarioEnd.B).toFixed(1)} fewer tonnes than the parasite-free reference. Try adding an intervention and compare.`;
+  } else {
+    $("takeaway-title").textContent =
+      biomassDifference >= 0
+        ? "A response changes the trajectory."
+        : "An intervention also carries a cost.";
+    $("takeaway-text").textContent =
+      `Your ${scenarioEnd.treatments === 1 ? "intervention" : scenarioEnd.treatments + " interventions"} leads to ${Math.abs(biomassDifference).toFixed(1)} ${biomassDifference >= 0 ? "more" : "fewer"} tonnes than the same conditions without intervention. ${numberFormatter.format(Math.round(scenarioEnd.N))} fish remain. These differences depend on the assumed effects.`;
+  }
+}
+$("download").addEventListener("click", () => {
+  if (!data || $("download").disabled) return;
+  const metadata = `# Fjord illustrative model v0.1 — uncalibrated, no real farm data\n# Parameters: ${JSON.stringify(data.p)}\n# Sensitivity envelope is not a confidence interval\n`;
+  const header =
+    "day,fish_alive,mean_weight_g,biomass_t,adult_female_lice_per_fish,temperature_c,interventions,biomass_without_intervention_t,biomass_without_parasites_t";
+  const rows = data.main.map((record, i) =>
+    [
+      record.day,
+      record.N.toFixed(2),
+      record.W.toFixed(3),
+      record.B.toFixed(4),
+      record.lice.toFixed(5),
+      record.T.toFixed(2),
+      record.treatments,
+      data.untreated[i].B.toFixed(4),
+      data.clean[i].B.toFixed(4),
+    ].join(","),
+  );
+  const url = URL.createObjectURL(
+    new Blob([metadata + header + "\n" + rows.join("\n")], {
+      type: "text/csv;charset=utf-8",
+    }),
+  );
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "fjord-illustrative-season.csv";
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  $("status").textContent = "Illustrative scenario exported as CSV.";
+});
+let lastFocus;
+function openDialog(name) {
+  pause();
+  lastFocus = document.activeElement;
+  if (name === "advanced") {
+    $("dialog-content").innerHTML =
+      `<h2>A little more control.</h2><p>All values describe an illustrative cohort. They are not calibrated farm parameters.</p><div class="dialog-controls"><label>Growth model<select id="adv-growth"></select></label><label>Initial number of fish<input id="adv-fish" type="number" min="1000" max="200000" step="1000"></label><label>Initial mean weight (grams)<input id="adv-weight" type="number" min="50" max="500" step="10"></label><label>Intervention profile<select id="adv-method"><option value="broad">Broad pulse — affects all attached stages</option><option value="adult">Adult-focused pulse — more young stages survive</option></select></label><label class="range-label" for="adv-efficacy">Assumed adult-stage removal<output id="adv-efficacy-value"></output></label><input id="adv-efficacy" type="range" min="0" max="100" step="5"><label class="range-label" for="adv-pressure">Outside infestation pressure<output id="adv-pressure-value"></output></label><input id="adv-pressure" type="range" min="0" max="2" step="0.1"></div><p style="margin-top:20px">Interventions also have a small illustrative fish loss and temporary growth cost. The two simple curve models do not directly respond to temperature; their parasites still do.</p><button id="apply-advanced" class="play-button">Apply & explore →</button>`;
+    $("adv-growth").innerHTML = Object.entries(GROWTH_MODELS)
+      .map(([value, label]) => `<option value="${value}">${label}</option>`)
+      .join("");
+    for (const key of ["fish", "weight", "efficacy", "pressure"]) {
+      const [minimum, maximum] = PARAMETER_LIMITS[key];
+      $("adv-" + key).min = minimum;
+      $("adv-" + key).max = maximum;
+    }
+    for (const key of ADVANCED_FIELDS) $("adv-" + key).value = parameters[key];
+    function labels() {
+      $("adv-efficacy-value").textContent = $("adv-efficacy").value + "%";
+      $("adv-pressure-value").textContent =
+        Number($("adv-pressure").value).toFixed(1) + "×";
+    }
+    labels();
+    $("adv-efficacy").oninput = labels;
+    $("adv-pressure").oninput = labels;
+    $("apply-advanced").onclick = () => {
+      for (const key of ["fish", "weight"]) {
+        const input = $("adv-" + key);
+        input.required = true;
+        if (!input.reportValidity()) return;
+      }
+      for (const key of ADVANCED_FIELDS)
+        parameters[key] = ["growth", "method"].includes(key)
+          ? $("adv-" + key).value
+          : Number($("adv-" + key).value);
+      closeDialog();
+      run();
+    };
+  } else
+    $("dialog-content").innerHTML =
+      DIALOG_CONTENT[name] || DIALOG_CONTENT.guide;
+  $("dialog-content").querySelector("h2").id = "dialog-title";
+  if (!$("info-dialog").open) $("info-dialog").showModal();
+  $("info-dialog").scrollTop = 0;
+  $("close-dialog").focus();
+}
+function closeDialog() {
+  $("info-dialog").close();
+}
+document
+  .querySelectorAll("[data-dialog]")
+  .forEach((button) =>
+    button.addEventListener("click", () => openDialog(button.dataset.dialog)),
+  );
+$("close-dialog").addEventListener("click", closeDialog);
+$("info-dialog").addEventListener("click", (e) => {
+  if (e.target === $("info-dialog")) {
+    const bounds = $("info-dialog").getBoundingClientRect();
+    if (
+      e.clientX < bounds.left ||
+      e.clientX > bounds.right ||
+      e.clientY < bounds.top ||
+      e.clientY > bounds.bottom
+    )
+      closeDialog();
+  }
+});
+$("info-dialog").addEventListener("close", () => lastFocus?.focus());
 run();

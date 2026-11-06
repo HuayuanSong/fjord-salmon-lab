@@ -7,13 +7,14 @@ A visual, browser-only salmon-farm simulation. Explore a year of fish growth, se
 Requires Python 3. No dependency installation or build is needed.
 
 ```sh
-cd /Users/huayuansong/Documents/git/salmon-lab
+git clone https://github.com/HuayuanSong/fjord-salmon-lab.git
+cd fjord-salmon-lab
 python3 -m http.server 4387 --bind 127.0.0.1 --directory dist
 ```
 
 Open **http://127.0.0.1:4387/**. Keep the terminal running; press Ctrl+C to stop it. If that port is occupied, change `4387` in both the command and the address. Serve the files over HTTP rather than opening `index.html` directly, because the app uses JavaScript modules and a module worker.
 
-With Node.js installed, `npm start` runs the same server. `npm test` checks model invariants and intervention behavior, and `npm run check` checks JavaScript syntax.
+With Node.js 24 or later installed, `npm start` runs the same server. `npm test` checks model invariants, interventions, worker scheduling/fallback and explanatory captions. `npm run check` checks all JavaScript modules. For development, `npm ci` installs the pinned formatter; use `npm run format` or `npm run format:check`. There are no runtime dependencies.
 
 ## Explore
 
@@ -30,9 +31,11 @@ On phones, **Adjust temperature & events** expands the detailed controls. **How 
 
 Everything required to run the app is in `dist/`, including `.nojekyll`. Asset and worker paths are relative, so it can run under a GitHub Pages project subpath. There is no backend, API key, external font, paid model API or database. A Web Worker calculates the scenarios, with a synchronous fallback.
 
-For GitHub Pages, put the **contents** of `dist/` at the root of a dedicated Pages repository and configure Pages to publish that branch's root folder. Alternatively, use a Pages workflow that uploads `dist/` as its artifact. See [GitHub Pages documentation](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages). This project has not created or published a GitHub repository.
+The GitHub Pages workflow in `.github/workflows/pages.yml` runs syntax, behavior and formatting checks on pull requests and pushes. Successful pushes to `main` publish `dist/`; manual runs are available from the Actions tab. GitHub's Pages source must be set to **GitHub Actions**. The workflow uses pinned action commits, read-only repository access for checks, and deployment permissions only in the deploy job. There is no scheduled task or data download.
 
-`.openai/hosting.json` configures the separate Sites preview. It is not needed by GitHub Pages.
+The live URL is **https://HuayuanSong.github.io/fjord-salmon-lab/**. See [GitHub Pages documentation](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages) for the hosting workflow.
+
+`.openai/hosting.json` retains the original private Sites preview identity. GitHub Pages uses only `dist/`, so that metadata is not part of the deployed website.
 
 ## Scientific scope
 
@@ -57,11 +60,11 @@ These sources provide context and possible directions for a later calibrated mod
 
 ## Project structure
 
-| File | Purpose |
-| --- | --- |
-| `dist/index.html`, `dist/style.css` | Accessible controls and responsive interface |
-| `dist/model.mjs` | Pure simulation, presets and sensitivity runs |
-| `dist/worker.mjs` | Background computation |
-| `dist/scene.mjs` | Canvas illustration, with reduced-motion support |
-| `dist/app.mjs` | Playback, chart, dialogs and CSV export |
-| `test/model.test.mjs` | Numerical invariants and behavior checks |
+| File                                                               | Purpose                                                 |
+| ------------------------------------------------------------------ | ------------------------------------------------------- |
+| `dist/index.html`, `dist/style.css`                                | Accessible controls and responsive interface            |
+| `dist/model.mjs`                                                   | Pure simulation, presets and sensitivity runs           |
+| `dist/worker.mjs`, `dist/simulation-runner.mjs`                    | Background computation, coalesced requests and fallback |
+| `dist/scene.mjs`                                                   | Canvas illustration, with reduced-motion support        |
+| `dist/app.mjs`, `dist/presentation.mjs`, `dist/dialog-content.mjs` | Playback, chart, explanations, dialogs and CSV export   |
+| `test/*.test.mjs`                                                  | Model, worker and presentation regression checks        |
