@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Explore a year beneath the surface. An interactive, illustrative salmon-farm simulation of growth, sea lice and intervention.">
+  <meta name="theme-color" content="#183b38"><title>Fjord — A living systems lab</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <header class="site-header"><a class="brand" href="./" aria-label="Fjord home"><svg viewBox="0 0 44 30" aria-hidden="true"><path d="M3 15C14-1 28-1 36 15 28 31 14 31 3 15ZM34 15 43 7V23Z" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="#f6f4ed"/></svg>FJORD<span>A living systems lab</span></a><nav aria-label="Information"><button class="text-button" data-dialog="guide">How to explore <span>↗</span></button><button class="text-button" data-dialog="notes">Model notes <span>↗</span></button></nav></header>
+  <main>
+    <section class="intro"><div><p class="eyebrow"><span class="tiny-line"></span> BENEATH THE SURFACE</p><h1>A small ocean.<br><em>A living system.</em></h1></div><div class="intro-aside"><p>Grow a school of salmon. Introduce a parasite.<br>Change one thing, and watch the season unfold.</p><span class="prototype-tag"><i></i> An illustrative science playground</span></div></section>
+    <div class="lab-layout">
+      <aside class="controls" aria-label="Simulation settings">
+        <div class="section-heading"><span class="step">01</span><h2>Choose your story</h2></div>
+        <div class="stories" role="group" aria-label="Prepared scenarios">
+          <button class="story" data-preset="calm" aria-pressed="false"><span class="story-icon">○</span><span><strong>A calm start</strong><small>Just a school, growing.</small></span><span class="story-arrow">↗</span></button>
+          <button class="story" data-preset="lice" aria-pressed="false"><span class="story-icon">✳</span><span><strong>An unwelcome guest</strong><small>Sea lice enter the picture.</small></span><span class="story-arrow">↗</span></button>
+          <button class="story active" data-preset="response" aria-pressed="true"><span class="story-icon">↗</span><span><strong>A timely response</strong><small>Explore an intervention.</small></span><span class="story-arrow">↗</span></button>
+          <button class="story" data-preset="warm" aria-pressed="false"><span class="story-icon">☼</span><span><strong>A warmer season</strong><small>Two populations feel the heat.</small></span><span class="story-arrow">↗</span></button>
+        </div>
+        <button id="toggle-settings" class="mobile-settings-toggle" aria-expanded="false" aria-controls="season-settings">Adjust temperature & events <span>+</span></button>
+        <div id="season-settings" class="season-settings">
+        <div class="section-heading second"><span class="step">02</span><h2>Shape the season</h2><button class="icon-button" id="reset-settings" title="Restore the selected story" aria-label="Restore selected story settings">↺</button></div>
+        <label class="range-label" for="warming">Water temperature <output id="warming-value">Typical season</output></label><input id="warming" type="range" min="-3" max="4" step="0.5" value="0"><div class="range-ends"><span>Cooler</span><span>Warmer</span></div>
+        <label class="range-label" for="feed">Food availability <output id="feed-value">100%</output></label><input id="feed" type="range" min="65" max="120" step="5" value="100"><div class="range-ends"><span>Less food</span><span>More food</span></div>
+        <details class="settings-details" open><summary>Plan the events <span>+</span></summary><div class="event-settings">
+          <label class="check-label"><input id="infestation" type="checkbox" checked> Introduce sea lice</label>
+          <div id="lice-settings"><label class="range-label" for="seedDay">Arrival <output id="seedDay-value">Day 35</output></label><input id="seedDay" type="range" min="1" max="300" step="1" value="35"></div>
+          <label class="check-label"><input id="treatment" type="checkbox" checked> Add an intervention</label>
+          <div id="treatment-settings"><label class="range-label" for="treatmentDay">Apply on <output id="treatmentDay-value">Day 110</output></label><input id="treatmentDay" type="range" min="1" max="350" step="1" value="110"><label class="check-label small"><input id="repeat" type="checkbox"> Repeat every 70 days</label></div>
+        </div></details>
+        <button class="advanced-button" data-dialog="advanced">Fine-tune the model <span>↗</span></button>
+        <p class="control-footnote">Changes rerun the same 365-day season. These are simulated outcomes, not farm forecasts.</p>
+        </div>
+      </aside>
+      <section class="main-lab" aria-label="Living farm and results">
+        <div class="ocean-card">
+          <canvas id="ocean" role="img" aria-label="Illustrative underwater salmon cage. Fish size follows simulated mean weight; the school is a representative sample, not individual tracked fish."></canvas>
+          <div class="scene-heading"><div><span class="scene-eyebrow">YOUR VIRTUAL FARM</span><h2 id="scene-title">A timely response</h2></div><span class="water-temp"><span>≈</span><strong id="temperature">7.6</strong>°C</span></div>
+          <div class="scene-label"><span class="live-dot"></span> A representative school · not to scale</div>
+          <div class="scene-actions"><button id="show-lice" aria-pressed="false">✳ <span>Reveal the parasites</span></button><button data-dialog="fish">Meet the salmon ↗</button></div>
+          <div class="scene-caption" id="scene-caption">A new cohort enters the water. The fish will grow in size, not reproduce in this cage.</div>
+          <div class="scene-day"><span id="season-name">EARLY SPRING</span><strong>Day <span id="day-number">0</span><small> / 365</small></strong></div>
+        </div>
+        <div class="transport"><button id="play" class="play-button" aria-label="Play the season"><span id="play-icon">▶</span><span id="play-label">Play season</span></button><button id="rewind" class="icon-button" aria-label="Rewind to day zero" title="Rewind">↺</button><div class="timeline"><div id="event-markers" class="event-markers" aria-hidden="true"></div><label class="sr-only" for="time">Simulation day</label><input id="time" type="range" min="0" max="365" step="1" value="0"><div class="time-labels"><span>Start</span><span>6 months</span><span>1 year</span></div></div><label class="speed-label"><span class="sr-only">Playback speed</span><select id="speed"><option value="12">1×</option><option value="30" selected>2.5×</option><option value="60">5×</option></select></label></div>
+        <div class="metrics" aria-label="Current simulated state">
+          <div class="metric"><span>Fish alive <button data-dialog="fish" aria-label="About fish numbers">ⓘ</button></span><strong id="fish-count">100,000</strong><small id="survival">100% of the original school</small></div>
+          <div class="metric"><span>Average weight</span><strong id="fish-weight">0.15 <i>kg</i></strong><small>Per living fish</small></div>
+          <div class="metric"><span>Total biomass</span><strong id="biomass">15.0 <i>t</i></strong><small>Fish count × average weight</small></div>
+          <div class="metric"><span>Adult female lice <button data-dialog="parasites" aria-label="About lice counts">ⓘ</button></span><strong id="lice-count">0.00</strong><small>Per living fish</small></div>
+        </div>
+        <section class="chart-card"><div class="chart-top"><div><p class="eyebrow">THE SEASON, IN NUMBERS</p><h2>One change. A different trajectory.</h2></div><button id="download" class="download-button" title="Download simulated daily results">Export CSV ↓</button></div>
+          <div class="chart-toolbar"><div class="chart-tabs" role="group" aria-label="Chart measurement"><button class="active" data-metric="B" aria-pressed="true">Biomass</button><button data-metric="lice" aria-pressed="false">Sea lice</button><button data-metric="W" aria-pressed="false">Fish weight</button><button data-metric="N" aria-pressed="false">Survival</button></div><label class="check-label small"><input id="show-band" type="checkbox" checked> Assumption range</label></div>
+          <div id="chart" class="chart" role="img" aria-label="Full-season simulated biomass with scenario comparisons"></div>
+          <div class="chart-legend"><span><i class="legend-line main-line"></i>Your scenario</span><span><i class="legend-line no-treatment-line"></i>Same conditions, no intervention</span><span><i class="legend-line clean-line"></i>No parasites or intervention</span></div>
+          <p class="chart-note">The shaded range tests four alternative parameter sets. It is not a confidence interval. The full season is shown; the vertical line follows playback.</p>
+        </section>
+      </section>
+    </div>
+    <section class="takeaway"><div class="takeaway-mark">↳</div><div><p class="eyebrow">AT THE END OF THIS SIMULATED YEAR</p><h2 id="takeaway-title">A living system has more than one outcome.</h2><p id="takeaway-text">Explore growth, survival and parasite burden together.</p></div><button id="jump-end">See day 365 <span>→</span></button></section>
+    <section class="learn-section"><div><p class="eyebrow">THREE THINGS TO NOTICE</p><h2>Look a little closer.</h2></div><div class="learning-grid"><button class="learning-card" data-dialog="fish"><span class="learning-number">01 / GROWTH</span><h3>Bigger fish.<br>Not more fish.</h3><p>A school can gain biomass even while losing fish.</p><span class="learn-link">Follow the numbers ↗</span></button><button class="learning-card" data-dialog="parasites"><span class="learning-number">02 / LIFE CYCLES</span><h3>What survives<br>can return.</h3><p>An intervention affects some stages more than others.</p><span class="learn-link">Meet the parasite ↗</span></button><button class="learning-card" data-dialog="uncertainty"><span class="learning-number">03 / ASSUMPTIONS</span><h3>One forecast.<br>Many possibilities.</h3><p>Change the assumptions and the outcome changes too.</p><span class="learn-link">Explore uncertainty ↗</span></button></div></section>
+  </main>
+  <footer><a class="footer-brand" href="./">FJORD</a><p>An independent, illustrative model of a living system.<br>Created for exploration. No live farm data or calibrated treatment advice.</p><button class="text-button" data-dialog="notes">Sources & assumptions ↗</button></footer>
+  <dialog id="info-dialog"><div class="dialog-top"><span class="eyebrow">A CLOSER LOOK</span><button id="close-dialog" class="icon-button" aria-label="Close panel">✕</button></div><div id="dialog-content"></div></dialog>
+  <div id="status" class="sr-only" aria-live="polite"></div>
+  <noscript><p class="noscript">This interactive simulation requires JavaScript. Its illustrative model tracks fish count, fish weight and sea-lice stages over one year.</p></noscript>
+  <script type="module" src="./app.mjs"></script>
+</body></html>
