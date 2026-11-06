@@ -353,9 +353,6 @@ export class OceanScene {
         context.fill();
       }
       context.globalAlpha = 1;
-      context.font = "10px -apple-system, sans-serif";
-      context.fillStyle = "#e59a87";
-      context.fillText("Parasite marks are magnified for visibility", 32, 188);
     }
     if (record?.recovery > 0) {
       context.strokeStyle = "#b3c4e5";

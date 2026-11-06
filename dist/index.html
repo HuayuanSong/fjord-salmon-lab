@@ -195,11 +195,6 @@
         </aside>
         <section class="main-lab" aria-label="Living farm and results">
           <div class="ocean-card">
-            <canvas
-              id="ocean"
-              role="img"
-              aria-label="Illustrative underwater salmon cage. Fish size follows simulated mean weight; the school is a representative sample, not individual tracked fish."
-            ></canvas>
             <div class="scene-heading">
               <div>
                 <span class="scene-eyebrow">YOUR VIRTUAL FARM</span>
@@ -212,21 +207,32 @@
             <div class="scene-label">
               <span class="live-dot"></span> A representative school · not to
               scale
-            </div>
-            <div class="scene-actions">
-              <button id="show-lice" aria-pressed="false">
-                ✳ <span>Reveal the parasites</span></button
-              ><button data-dialog="fish">Meet the salmon ↗</button>
-            </div>
-            <div class="scene-caption" id="scene-caption">
-              A new cohort enters the water. The fish will grow in size, not
-              reproduce in this cage.
-            </div>
-            <div class="scene-day">
-              <span id="season-name">EARLY SPRING</span
-              ><strong
-                >Day <span id="day-number">0</span><small> / 365</small></strong
+              <span id="parasite-note" hidden
+                >Parasite marks are magnified.</span
               >
+            </div>
+            <canvas
+              id="ocean"
+              role="img"
+              aria-label="Illustrative underwater salmon cage. Fish size follows simulated mean weight; the school is a representative sample, not individual tracked fish."
+            ></canvas>
+            <div class="scene-footer">
+              <div class="scene-actions">
+                <button id="show-lice" aria-pressed="false">
+                  ✳ <span>Reveal the parasites</span></button
+                ><button data-dialog="fish">Meet the salmon ↗</button>
+              </div>
+              <div class="scene-caption" id="scene-caption">
+                A new cohort enters the water. The fish will grow in size, not
+                reproduce in this cage.
+              </div>
+              <div class="scene-day">
+                <span id="season-name">EARLY SPRING</span
+                ><strong
+                  >Day <span id="day-number">0</span
+                  ><small> / 365</small></strong
+                >
+              </div>
             </div>
           </div>
           <div class="transport">

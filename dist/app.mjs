@@ -159,6 +159,7 @@ $("jump-end").addEventListener("click", () => {
 });
 $("show-lice").addEventListener("click", () => {
   showLice = !showLice;
+  $("parasite-note").hidden = !showLice;
   $("show-lice").setAttribute("aria-pressed", String(showLice));
   $("show-lice").querySelector("span").textContent = showLice
     ? "Hide the parasites"
@@ -238,16 +239,25 @@ function value(record) {
   return record[metric];
 }
 let yMax = 1,
-  chartWidth = 780;
+  chartWidth = 780,
+  chartHeight = 260,
+  chartScale = 1;
 function chartX(day) {
-  return 43 + (day / DAYS) * (chartWidth - 68);
+  return 60 * chartScale + (day / DAYS) * (chartWidth - 100 * chartScale);
 }
 function chartY(value) {
-  return 182 - (value / yMax) * 153;
+  return (
+    chartHeight -
+    50 * chartScale -
+    (value / yMax) * (chartHeight - 90 * chartScale)
+  );
 }
 function renderChart() {
   if (!data) return;
-  chartWidth = Math.max(300, $("chart").clientWidth);
+  chartWidth = Math.max(200, $("chart").clientWidth);
+  chartHeight = $("chart").clientHeight;
+  chartScale =
+    parseFloat(getComputedStyle(document.documentElement).fontSize) / 16;
   let max = 0;
   for (const series of [data.main, data.untreated, data.clean]) {
     for (const record of series) max = Math.max(max, value(record));
@@ -267,15 +277,22 @@ function renderChart() {
           `${i ? "L" : "M"}${chartX(record.day).toFixed(2)},${chartY(value(record)).toFixed(2)}`,
       )
       .join("");
-  let svg = `<svg viewBox="0 0 ${chartWidth} 220" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><title>${METRICS[metric].name}: simulated full-season comparisons</title><text x="43" y="14" fill="var(--muted)" font-size="10" font-family="sans-serif">${METRICS[metric].unit}</text>`;
+  let svg = `<svg viewBox="0 0 ${chartWidth} ${chartHeight}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><title>${METRICS[metric].name}: simulated full-season comparisons</title><text x="0" y="${18 * chartScale}" fill="var(--muted)" font-size="${14 * chartScale}" font-family="sans-serif">${METRICS[metric].unit}</text>`;
   for (let i = 0; i <= 4; i++) {
     const val = (yMax * i) / 4,
       y = chartY(val);
     const label = val.toFixed(METRICS[metric].decimals);
-    svg += `<line x1="43" y1="${y}" x2="${chartWidth - 25}" y2="${y}" stroke="var(--line)" stroke-width="1"/><text x="34" y="${y + 3}" text-anchor="end" fill="var(--muted)" font-size="10" font-family="sans-serif">${label}</text>`;
+    svg += `<line x1="${60 * chartScale}" y1="${y}" x2="${chartWidth - 40 * chartScale}" y2="${y}" stroke="var(--line)" stroke-width="1"/><text x="${50 * chartScale}" y="${y + 4 * chartScale}" text-anchor="end" fill="var(--muted)" font-size="${14 * chartScale}" font-family="sans-serif">${label}</text>`;
   }
-  for (const d of chartWidth < 480 ? [0, 180, 365] : [0, 90, 180, 270, 365])
-    svg += `<text x="${chartX(d)}" y="207" text-anchor="middle" fill="var(--muted)" font-size="10" font-family="sans-serif">Day ${d}</text>`;
+  const compactTicks = chartWidth / chartScale < 350;
+  let tickDays = [0, 90, 180, 270, DAYS];
+  if (compactTicks) tickDays = [0, DAYS];
+  else if (chartWidth / chartScale < 600) tickDays = [0, 180, DAYS];
+  for (const tickDay of tickDays) {
+    let label = `Day ${tickDay}`;
+    if (compactTicks) label = tickDay === 0 ? "Start" : "End";
+    svg += `<text x="${chartX(tickDay)}" y="${chartHeight - 15 * chartScale}" text-anchor="middle" fill="var(--muted)" font-size="${14 * chartScale}" font-family="sans-serif">${label}</text>`;
+  }
   if (bandOn) {
     const bounds = data.band;
     const coords = bounds
@@ -299,7 +316,7 @@ function renderChart() {
     [data.main, "var(--chart-main)", ""],
   ])
     svg += `<path d="${path(rows)}" fill="none" stroke="${color}" stroke-width="${dash ? 1.8 : 2.8}" stroke-dasharray="${dash}" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`;
-  svg += `<line id="cursor-line" x1="48" y1="23" x2="48" y2="186" stroke="var(--chart-main)" stroke-opacity=".45" stroke-dasharray="3 4"/><circle id="cursor-dot" cx="48" cy="182" r="4" fill="var(--chart-main)" stroke="var(--paper)" stroke-width="2"/></svg>`;
+  svg += `<line id="cursor-line" x1="${chartX(0)}" y1="${30 * chartScale}" x2="${chartX(0)}" y2="${chartHeight - 46 * chartScale}" stroke="var(--chart-main)" stroke-opacity=".45" stroke-dasharray="3 4"/><circle id="cursor-dot" cx="${chartX(0)}" cy="${chartY(0)}" r="4" fill="var(--chart-main)" stroke="var(--paper)" stroke-width="2"/></svg>`;
   $("chart").innerHTML = svg;
   $("chart").setAttribute(
     "aria-label",
@@ -320,7 +337,11 @@ document.querySelectorAll("[data-metric]").forEach((button) =>
 );
 $("show-band").addEventListener("change", renderChart);
 new ResizeObserver(() => {
-  if (Math.abs($("chart").clientWidth - chartWidth) > 1) renderChart();
+  if (
+    Math.abs($("chart").clientWidth - chartWidth) > 1 ||
+    Math.abs($("chart").clientHeight - chartHeight) > 1
+  )
+    renderChart();
 }).observe($("chart"));
 function renderTakeaway() {
   const scenarioEnd = data.main.at(-1),
