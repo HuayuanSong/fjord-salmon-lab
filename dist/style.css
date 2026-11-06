@@ -71,6 +71,8 @@ button:disabled {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 24px;
   border-bottom: 1px solid var(--line);
 }
 .brand {
@@ -97,6 +99,7 @@ button:disabled {
 }
 nav {
   display: flex;
+  align-items: center;
   gap: 25px;
 }
 .text-button {
@@ -105,6 +108,15 @@ nav {
 }
 .text-button span {
   margin-left: 14px;
+}
+.repo-link {
+  color: var(--primary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.repo-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }
 main {
   max-width: 1456px;
@@ -809,6 +821,9 @@ footer p {
 footer button {
   margin-left: auto;
   font-size: 10px !important;
+}
+footer .repo-link {
+  font-size: 10px;
 }
 dialog {
   border: 1px solid #bfc6d5;
